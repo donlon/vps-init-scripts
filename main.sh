@@ -27,12 +27,10 @@ fi
 
 
 update_user_pwd () {
-    USER_NAME=$1
-    RAND_PASSWD=$(openssl rand -base64 24)
-    RAND_PASSWD="${RAND_PASSWD//[\/+=]/}"
-    echo "New password for $USER_NAME is $RAND_PASSWD"
-    echo $RAND_PASSWD | passwd -s "$USER_NAME"
-    return $?
+    local user_name=$1 password
+    password=$(openssl rand -hex 24)
+    printf '%s:%s\n' "$user_name" "$password" | chpasswd
+    printf 'New password for %s is %s\n' "$user_name" "$password"
 }
 
 setup_system() {
