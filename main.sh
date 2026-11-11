@@ -8,13 +8,11 @@ trap 'echo "Failed at $BASH_SOURCE:$LINENO: $BASH_COMMAND" >&2' ERR
 #     exit 1
 # fi
 
-DIR=$(dirname -- "$0")
+DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$DIR/common.sh"
+load_host_config "${1:-$DIR/host.conf}"
 cd -- "$DIR"
 
-
-HOST_NAME=hostname
-HOST_EMAIL=host@example.com
-# USER_NAME=admin
 
 setup_zsh() {
     echo Setup zsh...
@@ -165,5 +163,11 @@ chsh -s /usr/bin/zsh
 setup_ufw
 setup_misc
 
-su admin -c 'bash ./admin.sh'
+ADMIN_SETUP_DIR=$(mktemp -d /home/admin/.vps-init.XXXXXX)
+install -o admin -g admin -m 600 "$CONFIG_FILE" "$ADMIN_SETUP_DIR/host.conf"
+install -o admin -g admin -m 644 admin.sh common.sh "$ADMIN_SETUP_DIR/"
+chown admin:admin "$ADMIN_SETUP_DIR"
+su - admin -c "bash '$ADMIN_SETUP_DIR/admin.sh' '$ADMIN_SETUP_DIR/host.conf'"
+rm -- "$ADMIN_SETUP_DIR/admin.sh" "$ADMIN_SETUP_DIR/common.sh" "$ADMIN_SETUP_DIR/host.conf"
+rmdir -- "$ADMIN_SETUP_DIR"
 chsh -s /usr/bin/zsh admin

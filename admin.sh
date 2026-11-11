@@ -8,10 +8,10 @@ if [ "$(id -u)" == "0" ]; then
     exit 1
 fi
 
-DIR=$(dirname -- "$0")
+DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$DIR/common.sh"
+load_host_config "${1:-$DIR/host.conf}"
 cd -- "$DIR"
-
-source common.sh
 
 setup_local_key() {
     mkdir -p ~/.gnupg/

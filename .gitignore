@@ -5,3 +5,8 @@
 *.[tT][gG][zZ]
 *.[tT][bB][zZ]2
 *.[tT][xX][zZ]
+
+# Local per-host configuration and SSH access keys
+/host.conf
+/hosts/*.conf
+/authorized_keys

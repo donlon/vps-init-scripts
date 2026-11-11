@@ -1,0 +1,5 @@
+# Copy to host.conf (or hosts/<host>.conf) and edit before running:
+# sudo bash main.sh [path/to/host.conf]
+# This is trusted shell code: only source configuration you control.
+HOST_NAME=hostname
+HOST_EMAIL=host@example.com
