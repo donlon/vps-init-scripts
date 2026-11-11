@@ -46,26 +46,37 @@ setup_system() {
 
 setup_users() {
     update_user_pwd root
-
-    USER_NAME=admin
-    # TODO: check if admin exists
-    echo Setup new user ${USER_NAME}...
-
-    useradd admin &&
-        mkdir -p ~admin/.ssh &&
-        chown admin:admin ~admin && chmod 700 ~admin &&
-        chown admin:admin ~admin/.ssh && chmod 700 ~admin/.ssh &&
-        cat ./authorized_keys >> ~admin/.ssh/authorized_keys &&
-        chown admin:admin ~admin/.ssh/authorized_keys && chmod 700 ~admin/.ssh/authorized_keys
-
-    # Verify authorized_keys
-    [ $(sha256sum ~admin/.ssh/authorized_keys | cut -d' ' -f1) != $(sha256sum ./authorized_keys | cut -d' ' -f1) ] && {
-        echo "failed to write authorized_keys"
-        exit 1
-    }
+    echo 'Setup admin user...'
+    if ! id admin >/dev/null 2>&1; then
+        useradd --create-home --shell /bin/bash admin
+    fi
+    ADMIN_HOME=$(getent passwd admin | cut -d: -f6)
+    ADMIN_GROUP=$(id -gn admin)
+    if [[ $ADMIN_HOME != /* ]] || [ "$ADMIN_HOME" = / ]; then
+        echo 'Admin must have a dedicated absolute home directory.' >&2
+        return 1
+    fi
+    install -d -o admin -g "$ADMIN_GROUP" -m 700 "$ADMIN_HOME" "$ADMIN_HOME/.ssh"
+    local keys_file sudoers_file
+    keys_file=$(mktemp)
+    if [ -f "$ADMIN_HOME/.ssh/authorized_keys" ]; then
+        cat "$ADMIN_HOME/.ssh/authorized_keys" > "$keys_file"
+        printf '\n' >> "$keys_file"
+    fi
+    cat "$DIR/authorized_keys" >> "$keys_file"
+    awk '!seen[$0]++' "$keys_file" > "$keys_file.unique"
+    install -o admin -g "$ADMIN_GROUP" -m 600 "$keys_file.unique" "$ADMIN_HOME/.ssh/authorized_keys"
+    rm -- "$keys_file" "$keys_file.unique"
     update_user_pwd admin
-    adduser admin sudo
-    sed -i 's/^[#\s]*%sudo\s*ALL.*/%sudo   ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
+    usermod -aG sudo admin
+    visudo -c
+    install -d -m 755 /etc/sudoers.d
+    sudoers_file=$(mktemp)
+    printf 'admin ALL=(ALL:ALL) NOPASSWD: ALL\n' > "$sudoers_file"
+    visudo -cf "$sudoers_file"
+    install -o root -g root -m 440 "$sudoers_file" /etc/sudoers.d/90-vps-init-admin
+    rm -- "$sudoers_file"
+    visudo -c
 }
 
 update_config() {
@@ -103,10 +114,10 @@ setup_sshd() {
 
 update_packages() {
     echo Install common packages...
-    apt update
-    apt upgrade -y
-    apt install sudo tmux mtr dnsutils htop rsync zsh git vim curl wget unzip gnupg socat \
-        iftop iotop ncdu proxychains python-is-python3 ufw zip unzip xxd strace -y
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+    DEBIAN_FRONTEND=noninteractive apt-get install -y sudo tmux mtr dnsutils htop rsync zsh git vim curl wget unzip gnupg socat \
+        iftop iotop ncdu proxychains python-is-python3 ufw zip xxd strace tree openssl openssh-server ca-certificates
 }
 
 setup_ufw() {
@@ -126,21 +137,20 @@ setup_misc() {
 
 # TODO: prompt hostname
 
+update_packages
 setup_system
 setup_users
 setup_sshd
-# add prompt before install packages
-update_packages
 setup_zsh
 chsh -s /usr/bin/zsh
 
 setup_ufw
 setup_misc
 
-ADMIN_SETUP_DIR=$(mktemp -d /home/admin/.vps-init.XXXXXX)
-install -o admin -g admin -m 600 "$CONFIG_FILE" "$ADMIN_SETUP_DIR/host.conf"
-install -o admin -g admin -m 644 admin.sh common.sh zsh.sh "$ADMIN_SETUP_DIR/"
-chown admin:admin "$ADMIN_SETUP_DIR"
+ADMIN_SETUP_DIR=$(mktemp -d "$ADMIN_HOME/.vps-init.XXXXXX")
+install -o admin -g "$ADMIN_GROUP" -m 600 "$CONFIG_FILE" "$ADMIN_SETUP_DIR/host.conf"
+install -o admin -g "$ADMIN_GROUP" -m 644 admin.sh common.sh zsh.sh "$ADMIN_SETUP_DIR/"
+chown admin:"$ADMIN_GROUP" "$ADMIN_SETUP_DIR"
 su - admin -c "bash '$ADMIN_SETUP_DIR/admin.sh' '$ADMIN_SETUP_DIR/host.conf'"
 rm -- "$ADMIN_SETUP_DIR/admin.sh" "$ADMIN_SETUP_DIR/common.sh" "$ADMIN_SETUP_DIR/zsh.sh" "$ADMIN_SETUP_DIR/host.conf"
 rmdir -- "$ADMIN_SETUP_DIR"
