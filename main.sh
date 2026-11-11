@@ -28,7 +28,8 @@ fi
 
 update_user_pwd () {
     local user_name=$1 password
-    password=$(openssl rand -hex 24)
+    password=$(openssl rand -base64 24)
+    password="${password//[\/+=]/}"
     printf '%s:%s\n' "$user_name" "$password" | chpasswd
     printf 'New password for %s is %s\n' "$user_name" "$password"
 }
