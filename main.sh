@@ -11,45 +11,9 @@ trap 'echo "Failed at $BASH_SOURCE:$LINENO: $BASH_COMMAND" >&2' ERR
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$DIR/common.sh"
 load_host_config "${1:-$DIR/host.conf}"
+source "$DIR/zsh.sh"
 cd -- "$DIR"
 
-
-setup_zsh() {
-    echo Setup zsh...
-    # su admin -c '
-    sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-    # TODO: exit zsh after install
-
-    git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions.git \
-        ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-    # git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git \
-    #     ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-    git clone --depth=1 https://github.com/z-shell/F-Sy-H.git \
-        ${ZSH_nCUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/F-Sy-H
-
-    sed -i '/^plugins=/a\
-\
-# Max history size\
-HISTSIZE=10000000\
-HISTFILESIZE=10000000\
-\
-# .zshcompdump path\
-ZSH_COMPDUMP="${XDG_CACHE_HOME:-$HOME/.cache}/.zcompdump-${ZSH_VERSION}"\
-autoload -Uz compinit\
-compinit -C -d "$ZSH_COMPDUMP"' ~/.zshrc
-
-    sed -i 's/^plugins=.*/plugins=(git zsh-autosuggestions F-Sy-H)/' ~/.zshrc
-    sed -i 's/^ZSH_THEME=.*/ZSH_THEME="maran"/' ~/.zshrc
-
-    echo '\
-export PATH=$HOME/.local/bin:$HOME/.cargo/bin:/sbin:$PATH\
-export EDITOR=vim\
-\
-alias diff="diff --color=always"\
-alias t=tree -a\
-alias pxy=proxychains\
-' >> $HOME/.zshrc
-}
 
 update_user_pwd () {
     USER_NAME=$1
@@ -165,9 +129,9 @@ setup_misc
 
 ADMIN_SETUP_DIR=$(mktemp -d /home/admin/.vps-init.XXXXXX)
 install -o admin -g admin -m 600 "$CONFIG_FILE" "$ADMIN_SETUP_DIR/host.conf"
-install -o admin -g admin -m 644 admin.sh common.sh "$ADMIN_SETUP_DIR/"
+install -o admin -g admin -m 644 admin.sh common.sh zsh.sh "$ADMIN_SETUP_DIR/"
 chown admin:admin "$ADMIN_SETUP_DIR"
 su - admin -c "bash '$ADMIN_SETUP_DIR/admin.sh' '$ADMIN_SETUP_DIR/host.conf'"
-rm -- "$ADMIN_SETUP_DIR/admin.sh" "$ADMIN_SETUP_DIR/common.sh" "$ADMIN_SETUP_DIR/host.conf"
+rm -- "$ADMIN_SETUP_DIR/admin.sh" "$ADMIN_SETUP_DIR/common.sh" "$ADMIN_SETUP_DIR/zsh.sh" "$ADMIN_SETUP_DIR/host.conf"
 rmdir -- "$ADMIN_SETUP_DIR"
 chsh -s /usr/bin/zsh admin

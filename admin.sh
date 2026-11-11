@@ -11,6 +11,7 @@ fi
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$DIR/common.sh"
 load_host_config "${1:-$DIR/host.conf}"
+source "$DIR/zsh.sh"
 cd -- "$DIR"
 
 setup_local_key() {
