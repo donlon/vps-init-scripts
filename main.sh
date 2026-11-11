@@ -79,37 +79,58 @@ setup_users() {
     visudo -c
 }
 
-update_config() {
-    PROP=$1
-    VALUE=$2
-    FILE=$3
-    sed -i "s/^[#\s]*$PROP .*/$PROP $VALUE/" $FILE
-}
-
-update_sshd_config() {
-    PROP=$1
-    VALUE=$2
-    update_config $PROP $VALUE /etc/ssh/sshd_config
-}
-
 setup_sshd() {
-    echo "Update sshd config..."
-    update_sshd_config PermitRootLogin no
-    update_sshd_config StrictModes yes
-    update_sshd_config PubkeyAuthentication yes
-    update_sshd_config PasswordAuthentication no
-    update_sshd_config PermitEmptyPasswords no
-    update_sshd_config ClientAliveInterval 5
-    update_sshd_config ClientAliveCountMax 12
-
-    mkdir /etc/ssh/old/
-    mv /etc/ssh/ssh_host_* /etc/ssh/old/
+    echo 'Update sshd config...'
+    # Verify admin keys and sudo before disabling root/password authentication.
+    ssh-keygen -lf "$ADMIN_HOME/.ssh/authorized_keys" >/dev/null
+    su - admin -c 'sudo -n true'
+    local backup config=/etc/ssh/sshd_config dropin=/etc/ssh/sshd_config.d/00-vps-init.conf
+    backup=$(mktemp -d /etc/ssh/vps-init-backup.XXXXXX)
+    cp -p -- "$config" "$backup/sshd_config"
+    install -d -m 755 /etc/ssh/sshd_config.d
+    if [ -f "$dropin" ]; then
+        cp -p -- "$dropin" "$backup/dropin"
+    fi
+    cat > "$dropin" <<'EOF'
+PermitRootLogin no
+StrictModes yes
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+ClientAliveInterval 5
+ClientAliveCountMax 12
+EOF
+    chmod 644 "$dropin"
+    # First value wins in sshd; put our global include before vendor defaults.
+    sed '\|^Include /etc/ssh/sshd_config.d/00-vps-init.conf$|d' "$config" > "$backup/new_config"
+    { printf 'Include %s\n' "$dropin"; cat "$backup/new_config"; } > "$config"
+    # Generate missing keys only; never rotate existing host identity on reruns.
     ssh-keygen -A
-    # restorecon /etc/ssh/ssh_host_*
-    echo "New ssh host keys:"
-    cat /etc/ssh/ssh_host_*_key.pub | ssh-keygen -lf -
-
-    echo "Restart sshd..."
+    if ! /usr/sbin/sshd -t; then
+        cp -p -- "$backup/sshd_config" "$config"
+        if [ -f "$backup/dropin" ]; then
+            cp -p -- "$backup/dropin" "$dropin"
+        else
+            rm -- "$dropin"
+        fi
+        echo "Invalid SSH configuration; restored originals. Backup: $backup" >&2
+        return 1
+    fi
+    SSH_PORTS=$(/usr/sbin/sshd -T | awk '$1 == "port" {print $2}')
+    if [ -z "$SSH_PORTS" ]; then
+        echo 'Could not determine SSH listening ports.' >&2
+        return 1
+    fi
+    if systemctl is-active --quiet ssh.service; then
+        systemctl reload ssh.service
+    elif systemctl is-active --quiet sshd.service; then
+        systemctl reload sshd.service
+    else
+        echo "No active SSH service; configuration backup retained at $backup" >&2
+        return 1
+    fi
+    echo "SSH configuration validated and reloaded. Backup: $backup"
 }
 
 update_packages() {
@@ -123,7 +144,10 @@ update_packages() {
 setup_ufw() {
     ufw default deny incoming
     ufw default allow outgoing
-    ufw allow ssh
+    local port
+    for port in $SSH_PORTS; do
+        ufw allow "$port/tcp"
+    done
     ufw show added
     ufw --force enable
 }
