@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -Eeuo pipefail
+trap 'echo "Failed at $BASH_SOURCE:$LINENO: $BASH_COMMAND" >&2' ERR
+
 if [ "$(id -u)" == "0" ]; then
     echo "Please run this script as non-root user"
     exit 1
@@ -51,7 +54,7 @@ setup_misc() {
     fi
 }
 
-setup_zsh || {echo 'failed to setup_zsh'; exit 1}
+setup_zsh
 # TODO: chsh
-setup_local_key || {echo 'failed to setup_local_key'; exit 1}
-setup_misc || {echo 'failed to setup_misc'; exit 1}
+setup_local_key
+setup_misc

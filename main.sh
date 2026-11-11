@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -Eeuo pipefail
+trap 'echo "Failed at $BASH_SOURCE:$LINENO: $BASH_COMMAND" >&2' ERR
+
 # if [ "$(id -u)" != "0" ]; then
 #     echo "Please run this script as root user"
 #     exit 1
@@ -151,16 +154,16 @@ setup_misc() {
 
 # TODO: prompt hostname
 
-setup_system || {echo 'failed to setup_system'; exit 1}
-setup_users || {echo 'failed to setup_users'; exit 1}
-setup_sshd || {echo 'failed to setup_sshd'; exit 1}
+setup_system
+setup_users
+setup_sshd
 # add prompt before install packages
-update_packages || {echo 'failed to update_packages'; exit 1}
-setup_zsh || {echo 'failed to setup_zsh'; exit 1}
+update_packages
+setup_zsh
 chsh -s /usr/bin/zsh
 
-setup_ufw || {echo 'failed to setup_ufw'; exit 1}
-setup_misc || {echo 'failed to setup_misc'; exit 1}
+setup_ufw
+setup_misc
 
 su admin -c 'bash ./admin.sh'
 chsh -s /usr/bin/zsh admin
