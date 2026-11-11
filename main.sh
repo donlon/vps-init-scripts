@@ -3,16 +3,27 @@
 set -Eeuo pipefail
 trap 'echo "Failed at $BASH_SOURCE:$LINENO: $BASH_COMMAND" >&2' ERR
 
-# if [ "$(id -u)" != "0" ]; then
-#     echo "Please run this script as root user"
-#     exit 1
-# fi
+if [ "$(id -u)" != "0" ]; then
+    echo 'Please run this script as root user' >&2
+    exit 1
+fi
 
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$DIR/common.sh"
 load_host_config "${1:-$DIR/host.conf}"
 source "$DIR/zsh.sh"
 cd -- "$DIR"
+
+# Check access before changing passwords, SSH settings, or firewall rules.
+if [ ! -r "$DIR/authorized_keys" ] || [ ! -s "$DIR/authorized_keys" ]; then
+    echo "Missing or empty $DIR/authorized_keys; supply your SSH public key(s)." >&2
+    exit 1
+fi
+ssh-keygen -lf "$DIR/authorized_keys" >/dev/null
+if ! command -v apt-get >/dev/null || ! command -v systemctl >/dev/null; then
+    echo 'This script requires an apt-based Linux host running systemd.' >&2
+    exit 1
+fi
 
 
 update_user_pwd () {
